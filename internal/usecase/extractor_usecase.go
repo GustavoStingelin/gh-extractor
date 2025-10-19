@@ -60,6 +60,16 @@ func (u *ExtractorUseCase) extractAuthoredPRs(since time.Time) error {
 	u.logger.Info("Found authored PRs", "count", len(prs))
 
 	for i, pr := range prs {
+		// Check if PR already exists
+		if u.fileRepo.PRExists(pr.Repository.NameWithOwner, pr.Number, "pr") {
+			u.logger.Info("Skipping already downloaded authored PR",
+				"progress", fmt.Sprintf("%d/%d", i+1, len(prs)),
+				"repo", pr.Repository.NameWithOwner,
+				"number", pr.Number,
+				"title", pr.Title)
+			continue
+		}
+
 		u.logger.Info("Processing authored PR",
 			"progress", fmt.Sprintf("%d/%d", i+1, len(prs)),
 			"repo", pr.Repository.NameWithOwner,
@@ -90,6 +100,16 @@ func (u *ExtractorUseCase) extractReviewedPRs(since time.Time) error {
 	u.logger.Info("Found reviewed PRs", "count", len(prs))
 
 	for i, pr := range prs {
+		// Check if PR already exists
+		if u.fileRepo.PRExists(pr.Repository.NameWithOwner, pr.Number, "review") {
+			u.logger.Info("Skipping already downloaded reviewed PR",
+				"progress", fmt.Sprintf("%d/%d", i+1, len(prs)),
+				"repo", pr.Repository.NameWithOwner,
+				"number", pr.Number,
+				"title", pr.Title)
+			continue
+		}
+
 		u.logger.Info("Processing reviewed PR",
 			"progress", fmt.Sprintf("%d/%d", i+1, len(prs)),
 			"repo", pr.Repository.NameWithOwner,

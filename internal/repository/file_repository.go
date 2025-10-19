@@ -82,3 +82,27 @@ func (r *FileRepository) EnsureBaseDirectory() error {
 	}
 	return nil
 }
+
+// PRExists checks if both YAML and diff files exist for a PR
+func (r *FileRepository) PRExists(nameWithOwner string, number int, prType string) bool {
+	// Parse org and repo from nameWithOwner
+	parts := strings.Split(nameWithOwner, "/")
+	if len(parts) != 2 {
+		return false
+	}
+	org, repo := parts[0], parts[1]
+
+	// Check for YAML file
+	yamlPath := filepath.Join(r.baseDir, prType, org, repo, fmt.Sprintf("%d.yaml", number))
+	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
+		return false
+	}
+
+	// Check for diff file
+	diffPath := filepath.Join(r.baseDir, prType, org, repo, fmt.Sprintf("%d.diff", number))
+	if _, err := os.Stat(diffPath); os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}
