@@ -1,0 +1,84 @@
+package repository
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gh-extractor/internal/clients"
+
+	"gopkg.in/yaml.v3"
+)
+
+type FileRepository struct {
+	baseDir string
+}
+
+func NewFileRepository(baseDir string) *FileRepository {
+	return &FileRepository{
+		baseDir: baseDir,
+	}
+}
+
+// SavePRData saves PR data as YAML in the appropriate directory structure
+func (r *FileRepository) SavePRData(pr *clients.PullRequest, prType string) error {
+	// Parse org and repo from nameWithOwner (e.g., "btcsuite/btcwallet")
+	parts := strings.Split(pr.Repository.NameWithOwner, "/")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid repository name format: %s", pr.Repository.NameWithOwner)
+	}
+	org, repo := parts[0], parts[1]
+
+	// Create directory path: .data/{prType}/{org}/{repo}
+	dirPath := filepath.Join(r.baseDir, prType, org, repo)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dirPath, err)
+	}
+
+	// Marshal PR data to YAML
+	yamlData, err := yaml.Marshal(pr)
+	if err != nil {
+		return fmt.Errorf("failed to marshal PR data to YAML: %w", err)
+	}
+
+	// Write YAML file: {number}.yaml
+	yamlPath := filepath.Join(dirPath, fmt.Sprintf("%d.yaml", pr.Number))
+	if err := os.WriteFile(yamlPath, yamlData, 0644); err != nil {
+		return fmt.Errorf("failed to write YAML file %s: %w", yamlPath, err)
+	}
+
+	return nil
+}
+
+// SaveDiff saves PR diff in the appropriate directory structure
+func (r *FileRepository) SaveDiff(pr *clients.PullRequest, diff string, prType string) error {
+	// Parse org and repo from nameWithOwner
+	parts := strings.Split(pr.Repository.NameWithOwner, "/")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid repository name format: %s", pr.Repository.NameWithOwner)
+	}
+	org, repo := parts[0], parts[1]
+
+	// Create directory path: .data/{prType}/{org}/{repo}
+	dirPath := filepath.Join(r.baseDir, prType, org, repo)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dirPath, err)
+	}
+
+	// Write diff file: {number}.diff
+	diffPath := filepath.Join(dirPath, fmt.Sprintf("%d.diff", pr.Number))
+	if err := os.WriteFile(diffPath, []byte(diff), 0644); err != nil {
+		return fmt.Errorf("failed to write diff file %s: %w", diffPath, err)
+	}
+
+	return nil
+}
+
+// EnsureBaseDirectory ensures the base .data directory exists
+func (r *FileRepository) EnsureBaseDirectory() error {
+	if err := os.MkdirAll(r.baseDir, 0755); err != nil {
+		return fmt.Errorf("failed to create base directory %s: %w", r.baseDir, err)
+	}
+	return nil
+}

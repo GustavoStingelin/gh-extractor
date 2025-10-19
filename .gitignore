@@ -1,0 +1,11 @@
+# Data directory
+.data/
+
+# IDE
+.idea/
+.vscode/
+
+# Go
+*.test
+*.out
+vendor/
