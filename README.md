@@ -4,11 +4,21 @@ A Go CLI tool that extracts your GitHub activity from the last 3 months using th
 
 ## Development
 
-Run with verbose logging:
+Extract data with verbose logging:
 
 ```bash
 go run ./cmd/gh-extractor
 ```
+
+Generate a monthly summary (for example, October 2025):
+
+```bash
+go run ./cmd/gh-summary --month 10 --year 2025
+```
+
+This will write a Markdown file to:
+
+- `.data/summary/2025-10.md`
 
 Run tests:
 

@@ -2,11 +2,10 @@ package usecase
 
 import (
 	"fmt"
-	"log/slog"
-	"time"
-
 	"gh-extractor/internal/clients"
 	"gh-extractor/internal/repository"
+	"log/slog"
+	"time"
 )
 
 type ExtractorUseCase struct {
@@ -30,8 +29,8 @@ func (u *ExtractorUseCase) Extract() error {
 		return fmt.Errorf("failed to ensure base directory: %w", err)
 	}
 
-	// Calculate date 3 months ago
-	threeMonthsAgo := time.Now().AddDate(0, -3, 0)
+	// Calculate date 2 months ago
+	threeMonthsAgo := time.Now().AddDate(0, -2, 0)
 	u.logger.Info("Extracting GitHub activity", "since", threeMonthsAgo.Format("2006-01-02"))
 
 	// Extract authored PRs
