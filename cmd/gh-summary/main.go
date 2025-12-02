@@ -226,6 +226,11 @@ func summarizeReviewedPRs(baseDir, userLogin string, month, year int) ([]reviewe
 			return nil
 		}
 
+		// Skip PRs authored by the same user – we only want reviews on others' PRs
+		if pr.Author.Login == userLogin {
+			return nil
+		}
+
 		for _, review := range pr.Reviews {
 			if review.Author.Login != userLogin {
 				continue
