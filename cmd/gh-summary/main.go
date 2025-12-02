@@ -307,6 +307,14 @@ func countCommentsForAuthoredPR(pr *clients.PullRequest, userLogin string, month
 	}
 
 	for _, review := range pr.Reviews {
+		if review.Body != "" && isInMonthYear(review.SubmittedAt, month, year) {
+			if review.Author.Login == userLogin {
+				made++
+			} else {
+				received++
+			}
+		}
+
 		for _, rc := range review.ReviewComments {
 			if !isInMonthYear(rc.CreatedAt, month, year) {
 				continue
