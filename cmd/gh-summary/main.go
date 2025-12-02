@@ -32,6 +32,7 @@ type reviewedPRSummary struct {
 	Number     int
 	Title      string
 	URL        string
+	State      string
 	ReviewDate time.Time
 	Outcome    string
 }
@@ -255,6 +256,7 @@ func summarizeReviewedPRs(baseDir, userLogin string, month, year int) ([]reviewe
 					Number:     pr.Number,
 					Title:      pr.Title,
 					URL:        pr.URL,
+					State:      pr.State,
 					ReviewDate: review.SubmittedAt,
 					Outcome:    outcome,
 				}
@@ -408,25 +410,38 @@ func writeMarkdownSummary(authoredCreated, authoredUpdated []authoredPRSummary, 
 	if len(reviewed) == 0 {
 		fmt.Fprintln(w, "- Nenhum PR revisado.")
 	} else {
-		for _, pr := range reviewed {
-			outcome := ""
-			if pr.Outcome != "" {
-				outcome = fmt.Sprintf(" — outcome: %s", pr.Outcome)
+		order, grouped := groupReviewedPRs(reviewed)
+		for _, key := range order {
+			reviews := grouped[key]
+			pr := reviews[0]
+			fmt.Fprintf(w, "- %s#%d — %s (%s) — status: %s\n", pr.Repository, pr.Number, pr.Title, pr.URL, pr.State)
+			for _, rev := range reviews {
+				outcome := ""
+				if rev.Outcome != "" {
+					outcome = fmt.Sprintf(" — outcome: %s", rev.Outcome)
+				}
+				fmt.Fprintf(w, "  - %s%s\n", rev.ReviewDate.Format("2006-01-02"), outcome)
 			}
-			fmt.Fprintf(
-				w,
-				"- %s#%d — %s (%s) — revisão: %s%s\n",
-				pr.Repository,
-				pr.Number,
-				pr.Title,
-				pr.URL,
-				pr.ReviewDate.Format("2006-01-02"),
-				outcome,
-			)
 		}
 	}
 
 	return path, nil
+}
+
+// groupReviewedPRs keeps the input order (already sorted by date) while grouping reviews per PR.
+func groupReviewedPRs(reviewed []reviewedPRSummary) ([]string, map[string][]reviewedPRSummary) {
+	grouped := make(map[string][]reviewedPRSummary)
+	var order []string
+
+	for _, pr := range reviewed {
+		key := fmt.Sprintf("%s#%d", pr.Repository, pr.Number)
+		if _, ok := grouped[key]; !ok {
+			order = append(order, key)
+		}
+		grouped[key] = append(grouped[key], pr)
+	}
+
+	return order, grouped
 }
 
 func normalizeOutcome(state string) string {
