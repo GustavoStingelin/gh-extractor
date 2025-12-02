@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gh-extractor/internal/clients"
 
@@ -105,4 +106,57 @@ func (r *FileRepository) PRExists(nameWithOwner string, number int, prType strin
 	}
 
 	return true
+}
+
+// PRStatus reports whether a PR has already been downloaded and whether the local data
+// is up-to-date compared to the remote updatedAt timestamp and state. Missing files,
+// older local data, or differing state return upToDate=false.
+func (r *FileRepository) PRStatus(nameWithOwner string, number int, prType string, remoteUpdatedAt time.Time, remoteState string) (exists bool, upToDate bool, err error) {
+	parts := strings.Split(nameWithOwner, "/")
+	if len(parts) != 2 {
+		return false, false, fmt.Errorf("invalid repository name format: %s", nameWithOwner)
+	}
+
+	org, repo := parts[0], parts[1]
+	yamlPath := filepath.Join(r.baseDir, prType, org, repo, fmt.Sprintf("%d.yaml", number))
+	diffPath := filepath.Join(r.baseDir, prType, org, repo, fmt.Sprintf("%d.diff", number))
+
+	if _, err := os.Stat(yamlPath); err != nil {
+		if os.IsNotExist(err) {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+
+	if _, err := os.Stat(diffPath); err != nil {
+		if os.IsNotExist(err) {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+
+	// At this point both files exist.
+	data, err := os.ReadFile(yamlPath)
+	if err != nil {
+		return true, false, fmt.Errorf("failed to read YAML file %s: %w", yamlPath, err)
+	}
+
+	var pr clients.PullRequest
+	if err := yaml.Unmarshal(data, &pr); err != nil {
+		return true, false, fmt.Errorf("failed to parse YAML file %s: %w", yamlPath, err)
+	}
+
+	if pr.UpdatedAt.IsZero() || remoteUpdatedAt.IsZero() {
+		return true, false, nil
+	}
+
+	if remoteUpdatedAt.After(pr.UpdatedAt) {
+		return true, false, nil
+	}
+
+	if pr.State != "" && remoteState != "" && !strings.EqualFold(pr.State, remoteState) {
+		return true, false, nil
+	}
+
+	return true, true, nil
 }

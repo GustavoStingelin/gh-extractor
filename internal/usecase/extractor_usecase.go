@@ -59,8 +59,15 @@ func (u *ExtractorUseCase) extractAuthoredPRs(since time.Time) error {
 	u.logger.Info("Found authored PRs", "count", len(prs))
 
 	for i, pr := range prs {
-		// Check if PR already exists
-		if u.fileRepo.PRExists(pr.Repository.NameWithOwner, pr.Number, "pr") {
+		exists, upToDate, err := u.fileRepo.PRStatus(pr.Repository.NameWithOwner, pr.Number, "pr", pr.UpdatedAt, pr.State)
+		if err != nil {
+			u.logger.Warn("Failed to check authored PR status",
+				"repo", pr.Repository.NameWithOwner,
+				"number", pr.Number,
+				"error", err)
+		}
+
+		if err == nil && exists && upToDate {
 			u.logger.Info("Skipping already downloaded authored PR",
 				"progress", fmt.Sprintf("%d/%d", i+1, len(prs)),
 				"repo", pr.Repository.NameWithOwner,
@@ -69,7 +76,12 @@ func (u *ExtractorUseCase) extractAuthoredPRs(since time.Time) error {
 			continue
 		}
 
-		u.logger.Info("Processing authored PR",
+		logMsg := "Processing authored PR"
+		if exists {
+			logMsg = "Updating stale authored PR"
+		}
+
+		u.logger.Info(logMsg,
 			"progress", fmt.Sprintf("%d/%d", i+1, len(prs)),
 			"repo", pr.Repository.NameWithOwner,
 			"number", pr.Number,
@@ -99,8 +111,15 @@ func (u *ExtractorUseCase) extractReviewedPRs(since time.Time) error {
 	u.logger.Info("Found reviewed PRs", "count", len(prs))
 
 	for i, pr := range prs {
-		// Check if PR already exists
-		if u.fileRepo.PRExists(pr.Repository.NameWithOwner, pr.Number, "review") {
+		exists, upToDate, err := u.fileRepo.PRStatus(pr.Repository.NameWithOwner, pr.Number, "review", pr.UpdatedAt, pr.State)
+		if err != nil {
+			u.logger.Warn("Failed to check reviewed PR status",
+				"repo", pr.Repository.NameWithOwner,
+				"number", pr.Number,
+				"error", err)
+		}
+
+		if err == nil && exists && upToDate {
 			u.logger.Info("Skipping already downloaded reviewed PR",
 				"progress", fmt.Sprintf("%d/%d", i+1, len(prs)),
 				"repo", pr.Repository.NameWithOwner,
@@ -109,7 +128,12 @@ func (u *ExtractorUseCase) extractReviewedPRs(since time.Time) error {
 			continue
 		}
 
-		u.logger.Info("Processing reviewed PR",
+		logMsg := "Processing reviewed PR"
+		if exists {
+			logMsg = "Updating stale reviewed PR"
+		}
+
+		u.logger.Info(logMsg,
 			"progress", fmt.Sprintf("%d/%d", i+1, len(prs)),
 			"repo", pr.Repository.NameWithOwner,
 			"number", pr.Number,

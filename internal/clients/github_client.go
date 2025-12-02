@@ -84,6 +84,7 @@ type PRSearchResult struct {
 	URL        string     `json:"url"`
 	Repository Repository `json:"repository"`
 	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
 // SearchAuthoredPRs searches for PRs authored by the authenticated user since the given date
@@ -110,7 +111,7 @@ func (c *GitHubClient) SearchReviewedPRs(since time.Time) ([]PRSearchResult, err
 
 // searchPRs executes a PR search query
 func (c *GitHubClient) searchPRs(queryArgs []string) ([]PRSearchResult, error) {
-	args := []string{"search", "prs", "--limit", "1000", "--json", "number,title,state,url,repository,createdAt"}
+	args := []string{"search", "prs", "--limit", "1000", "--json", "number,title,state,url,repository,createdAt,updatedAt"}
 	args = append(args, queryArgs...)
 
 	cmd := exec.Command("gh", args...)
