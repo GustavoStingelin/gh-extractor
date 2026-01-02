@@ -208,7 +208,7 @@ func summarizeAuthoredPRs(baseDir, userLogin string, month, year int) ([]authore
 
 func summarizeReviewedPRs(baseDir, userLogin string, month, year int) ([]reviewedPRSummary, error) {
 	reviewDir := filepath.Join(baseDir, "review")
-	byPRAndDay := make(map[string]*reviewedPRSummary)
+	var summaries []reviewedPRSummary
 
 	err := filepath.WalkDir(reviewDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -240,27 +240,17 @@ func summarizeReviewedPRs(baseDir, userLogin string, month, year int) ([]reviewe
 				continue
 			}
 
-			day := review.SubmittedAt.Format("2006-01-02")
-			key := fmt.Sprintf("%s#%d@%s", pr.Repository.NameWithOwner, pr.Number, day)
 			outcome := normalizeOutcome(review.State)
 
-			if existing, ok := byPRAndDay[key]; ok {
-				// Keep earliest time in the day for ordering
-				if review.SubmittedAt.Before(existing.ReviewDate) {
-					existing.ReviewDate = review.SubmittedAt
-				}
-				existing.Outcome = mergeOutcome(existing.Outcome, outcome)
-			} else {
-				byPRAndDay[key] = &reviewedPRSummary{
-					Repository: pr.Repository.NameWithOwner,
-					Number:     pr.Number,
-					Title:      pr.Title,
-					URL:        pr.URL,
-					State:      pr.State,
-					ReviewDate: review.SubmittedAt,
-					Outcome:    outcome,
-				}
-			}
+			summaries = append(summaries, reviewedPRSummary{
+				Repository: pr.Repository.NameWithOwner,
+				Number:     pr.Number,
+				Title:      pr.Title,
+				URL:        pr.URL,
+				State:      pr.State,
+				ReviewDate: review.SubmittedAt,
+				Outcome:    outcome,
+			})
 		}
 
 		return nil
@@ -268,11 +258,6 @@ func summarizeReviewedPRs(baseDir, userLogin string, month, year int) ([]reviewe
 
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
-	}
-
-	var summaries []reviewedPRSummary
-	for _, s := range byPRAndDay {
-		summaries = append(summaries, *s)
 	}
 
 	sort.Slice(summaries, func(i, j int) bool {
@@ -420,7 +405,7 @@ func writeMarkdownSummary(authoredCreated, authoredUpdated []authoredPRSummary, 
 				if rev.Outcome != "" {
 					outcome = fmt.Sprintf(" — outcome: %s", rev.Outcome)
 				}
-				fmt.Fprintf(w, "  - %s%s\n", rev.ReviewDate.Format("2006-01-02"), outcome)
+				fmt.Fprintf(w, "  - %s%s\n", rev.ReviewDate.Format("2006-01-02 15:04"), outcome)
 			}
 		}
 	}
@@ -455,21 +440,4 @@ func normalizeOutcome(state string) string {
 	default:
 		return ""
 	}
-}
-
-func mergeOutcome(current, new string) string {
-	if new == "" {
-		return current
-	}
-	// Priority: changes requested > approved > commented
-	if current == "" {
-		return new
-	}
-	if current == "changes requested" || new == "changes requested" {
-		return "changes requested"
-	}
-	if current == "approved" || new == "approved" {
-		return "approved"
-	}
-	return "commented"
 }
