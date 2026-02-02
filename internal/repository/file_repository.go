@@ -160,3 +160,78 @@ func (r *FileRepository) PRStatus(nameWithOwner string, number int, prType strin
 
 	return true, true, nil
 }
+
+// SaveIssueData saves issue data as YAML in the appropriate directory structure
+func (r *FileRepository) SaveIssueData(issue *clients.Issue) error {
+	// Parse org and repo from nameWithOwner (e.g., "btcsuite/btcwallet")
+	parts := strings.Split(issue.Repository.NameWithOwner, "/")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid repository name format: %s", issue.Repository.NameWithOwner)
+	}
+	org, repo := parts[0], parts[1]
+
+	// Create directory path: .data/issue/{org}/{repo}
+	dirPath := filepath.Join(r.baseDir, "issue", org, repo)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dirPath, err)
+	}
+
+	// Marshal issue data to YAML
+	yamlData, err := yaml.Marshal(issue)
+	if err != nil {
+		return fmt.Errorf("failed to marshal issue data to YAML: %w", err)
+	}
+
+	// Write YAML file: {number}.yaml
+	yamlPath := filepath.Join(dirPath, fmt.Sprintf("%d.yaml", issue.Number))
+	if err := os.WriteFile(yamlPath, yamlData, 0644); err != nil {
+		return fmt.Errorf("failed to write YAML file %s: %w", yamlPath, err)
+	}
+
+	return nil
+}
+
+// IssueStatus reports whether an issue has already been downloaded and whether the local data
+// is up-to-date compared to the remote updatedAt timestamp and state. Missing files,
+// older local data, or differing state return upToDate=false.
+func (r *FileRepository) IssueStatus(nameWithOwner string, number int, remoteUpdatedAt time.Time, remoteState string) (exists bool, upToDate bool, err error) {
+	parts := strings.Split(nameWithOwner, "/")
+	if len(parts) != 2 {
+		return false, false, fmt.Errorf("invalid repository name format: %s", nameWithOwner)
+	}
+
+	org, repo := parts[0], parts[1]
+	yamlPath := filepath.Join(r.baseDir, "issue", org, repo, fmt.Sprintf("%d.yaml", number))
+
+	if _, err := os.Stat(yamlPath); err != nil {
+		if os.IsNotExist(err) {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+
+	// File exists, now check if it's up-to-date
+	data, err := os.ReadFile(yamlPath)
+	if err != nil {
+		return true, false, fmt.Errorf("failed to read YAML file %s: %w", yamlPath, err)
+	}
+
+	var issue clients.Issue
+	if err := yaml.Unmarshal(data, &issue); err != nil {
+		return true, false, fmt.Errorf("failed to parse YAML file %s: %w", yamlPath, err)
+	}
+
+	if issue.UpdatedAt.IsZero() || remoteUpdatedAt.IsZero() {
+		return true, false, nil
+	}
+
+	if remoteUpdatedAt.After(issue.UpdatedAt) {
+		return true, false, nil
+	}
+
+	if issue.State != "" && remoteState != "" && !strings.EqualFold(issue.State, remoteState) {
+		return true, false, nil
+	}
+
+	return true, true, nil
+}
