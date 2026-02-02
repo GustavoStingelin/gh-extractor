@@ -43,6 +43,11 @@ func (u *ExtractorUseCase) Extract() error {
 		return fmt.Errorf("failed to extract reviewed PRs: %w", err)
 	}
 
+	// Extract authored issues
+	if err := u.extractAuthoredIssues(threeMonthsAgo); err != nil {
+		return fmt.Errorf("failed to extract authored issues: %w", err)
+	}
+
 	u.logger.Info("Extraction completed successfully")
 	return nil
 }
@@ -143,6 +148,58 @@ func (u *ExtractorUseCase) extractReviewedPRs(since time.Time) error {
 			u.logger.Warn("Failed to process PR",
 				"repo", pr.Repository.NameWithOwner,
 				"number", pr.Number,
+				"error", err)
+			continue
+		}
+	}
+
+	return nil
+}
+
+// extractAuthoredIssues extracts issues authored by the user
+func (u *ExtractorUseCase) extractAuthoredIssues(since time.Time) error {
+	u.logger.Info("Searching for authored issues")
+
+	issues, err := u.githubClient.SearchAuthoredIssues(since)
+	if err != nil {
+		return err
+	}
+
+	u.logger.Info("Found authored issues", "count", len(issues))
+
+	for i, issue := range issues {
+		exists, upToDate, err := u.fileRepo.IssueStatus(issue.Repository.NameWithOwner, issue.Number, issue.UpdatedAt, issue.State)
+		if err != nil {
+			u.logger.Warn("Failed to check authored issue status",
+				"repo", issue.Repository.NameWithOwner,
+				"number", issue.Number,
+				"error", err)
+		}
+
+		if err == nil && exists && upToDate {
+			u.logger.Info("Skipping already downloaded authored issue",
+				"progress", fmt.Sprintf("%d/%d", i+1, len(issues)),
+				"repo", issue.Repository.NameWithOwner,
+				"number", issue.Number,
+				"title", issue.Title)
+			continue
+		}
+
+		logMsg := "Processing authored issue"
+		if exists {
+			logMsg = "Updating stale authored issue"
+		}
+
+		u.logger.Info(logMsg,
+			"progress", fmt.Sprintf("%d/%d", i+1, len(issues)),
+			"repo", issue.Repository.NameWithOwner,
+			"number", issue.Number,
+			"title", issue.Title)
+
+		if err := u.fileRepo.SaveIssueData(&issue); err != nil {
+			u.logger.Warn("Failed to save issue data",
+				"repo", issue.Repository.NameWithOwner,
+				"number", issue.Number,
 				"error", err)
 			continue
 		}
