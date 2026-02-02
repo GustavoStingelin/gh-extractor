@@ -37,6 +37,15 @@ type reviewedPRSummary struct {
 	Outcome    string
 }
 
+type issueSummary struct {
+	Repository string
+	Number     int
+	Title      string
+	URL        string
+	CreatedAt  time.Time
+	State      string
+}
+
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -92,7 +101,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	mdPath, err := writeMarkdownSummary(authoredCreated, authoredUpdated, reviewed, month, year, baseDir)
+	issues, err := summarizeAuthoredIssues(baseDir, month, year)
+	if err != nil {
+		logger.Error("Failed to summarize authored issues", "error", err)
+		os.Exit(1)
+	}
+
+	mdPath, err := writeMarkdownSummary(authoredCreated, authoredUpdated, reviewed, issues, month, year, baseDir)
 	if err != nil {
 		logger.Error("Failed to write markdown summary", "error", err)
 	} else {
@@ -267,6 +282,59 @@ func summarizeReviewedPRs(baseDir, userLogin string, month, year int) ([]reviewe
 	return summaries, nil
 }
 
+func summarizeAuthoredIssues(baseDir string, month, year int) ([]issueSummary, error) {
+	issueDir := filepath.Join(baseDir, "issue")
+	var summaries []issueSummary
+
+	err := filepath.WalkDir(issueDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".yaml" {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+
+		var issue clients.Issue
+		if err := yaml.Unmarshal(data, &issue); err != nil {
+			// Best-effort: skip invalid files
+			return nil
+		}
+
+		if !isInMonthYear(issue.CreatedAt, month, year) {
+			return nil
+		}
+
+		summaries = append(summaries, issueSummary{
+			Repository: issue.Repository.NameWithOwner,
+			Number:     issue.Number,
+			Title:      issue.Title,
+			URL:        issue.URL,
+			CreatedAt:  issue.CreatedAt,
+			State:      issue.State,
+		})
+
+		return nil
+	})
+
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].CreatedAt.Before(summaries[j].CreatedAt)
+	})
+
+	return summaries, nil
+}
+
 func loadPullRequestFromYAML(path string) (*clients.PullRequest, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -324,7 +392,7 @@ func isInMonthYear(t time.Time, month, year int) bool {
 	return t.Year() == year && int(t.Month()) == month
 }
 
-func writeMarkdownSummary(authoredCreated, authoredUpdated []authoredPRSummary, reviewed []reviewedPRSummary, month, year int, baseDir string) (string, error) {
+func writeMarkdownSummary(authoredCreated, authoredUpdated []authoredPRSummary, reviewed []reviewedPRSummary, issues []issueSummary, month, year int, baseDir string) (string, error) {
 	monthName := time.Month(month).String()
 
 	summaryDir := filepath.Join(baseDir, "summary")
@@ -345,6 +413,19 @@ func writeMarkdownSummary(authoredCreated, authoredUpdated []authoredPRSummary, 
 	defer w.Flush()
 
 	fmt.Fprintf(w, "Resumo %s/%d\n\n", monthName, year)
+
+	fmt.Fprintln(w, "Issues criadas")
+	fmt.Fprintln(w)
+	if len(issues) == 0 {
+		fmt.Fprintln(w, "- Nenhuma issue criada.")
+	} else {
+		for _, issue := range issues {
+			fmt.Fprintf(w, "- %s#%d — %s (%s) — criado: %s — status: %s\n",
+				issue.Repository, issue.Number, issue.Title, issue.URL,
+				issue.CreatedAt.Format("2006-01-02"), issue.State)
+		}
+	}
+	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "PRs criados")
 	fmt.Fprintln(w)
