@@ -76,6 +76,19 @@ type PullRequest struct {
 	Reviews    []Review   `json:"reviews"`
 }
 
+// Issue represents a GitHub issue with all details
+type Issue struct {
+	Number     int        `json:"number"`
+	Title      string     `json:"title"`
+	Body       string     `json:"body"`
+	State      string     `json:"state"`
+	URL        string     `json:"url"`
+	Author     Author     `json:"author"`
+	Repository Repository `json:"repository"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+}
+
 // PRSearchResult represents a simplified PR from search results
 type PRSearchResult struct {
 	Number     int        `json:"number"`
@@ -109,6 +122,16 @@ func (c *GitHubClient) SearchReviewedPRs(since time.Time) ([]PRSearchResult, err
 	return c.searchPRs(queryArgs)
 }
 
+// SearchAuthoredIssues searches for issues authored by the authenticated user since the given date
+func (c *GitHubClient) SearchAuthoredIssues(since time.Time) ([]Issue, error) {
+	queryArgs := []string{
+		"is:issue",
+		"author:@me",
+		fmt.Sprintf("created:>=%s", since.Format("2006-01-02")),
+	}
+	return c.searchIssues(queryArgs)
+}
+
 // searchPRs executes a PR search query
 func (c *GitHubClient) searchPRs(queryArgs []string) ([]PRSearchResult, error) {
 	args := []string{"search", "prs", "--limit", "1000", "--json", "number,title,state,url,repository,createdAt,updatedAt"}
@@ -121,6 +144,25 @@ func (c *GitHubClient) searchPRs(queryArgs []string) ([]PRSearchResult, error) {
 		return nil, fmt.Errorf("failed to search PRs: %w (output: %s)", err, string(output))
 	}
 	var results []PRSearchResult
+	if err := json.Unmarshal(output, &results); err != nil {
+		return nil, fmt.Errorf("failed to parse search results: %w", err)
+	}
+
+	return results, nil
+}
+
+// searchIssues executes an issue search query
+func (c *GitHubClient) searchIssues(queryArgs []string) ([]Issue, error) {
+	args := []string{"search", "issues", "--limit", "1000", "--json", "number,title,body,state,url,author,createdAt,updatedAt,repository"}
+	args = append(args, queryArgs...)
+
+	cmd := exec.Command("gh", args...)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to search issues: %w (output: %s)", err, string(output))
+	}
+	var results []Issue
 	if err := json.Unmarshal(output, &results); err != nil {
 		return nil, fmt.Errorf("failed to parse search results: %w", err)
 	}
